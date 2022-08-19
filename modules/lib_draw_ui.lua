@@ -5,6 +5,9 @@ module.textures = { }
 module.ui_objects = { }
 module.current_ui_object = false;
 
+--- Load specified path as a texture
+-- @param color Internal name that should be used to recall the texture
+-- @param path  Path to the texture file
 module.LoadTexturePixel = function(color, path)
 	-- Load texture into texture list
 	local idx = ShroudLoadTexture(path, true)
@@ -13,6 +16,8 @@ module.LoadTexturePixel = function(color, path)
 	end
 end
 
+--- Retrieve internal texture ID using color name provided
+-- @param color Name of the texture
 module.GetTextureId = function(color)
 	-- Get texture ID from texture name
 	if module.textures[color] then
@@ -21,7 +26,17 @@ module.GetTextureId = function(color)
 	return -1
 end
 
+--- Generate and cache texture element
+-- @param handle
+-- @param idx1
+-- @param idx2
+-- @param color
+
 module.PrepareSolidElement = function(handle, idx1, idx2, color)
+	idx1 = idx1 or 1
+	idx2 = idx2 or 1
+	
+
 	-- Prepare a Solid Texture Element (create a new one if not exists)
 	local key = handle .. "-" .. idx1 .. "-" .. idx2
 	if module.ui_objects[handle] then
