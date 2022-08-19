@@ -9,4 +9,4 @@ This script has intentionally been formatted to be deployed via Github.
 2. Please clone project using ```git clone https://github.com/John-Markus/Sota-Lua-DrawRadii.git```
 3. Please symlink ```DrawRadii.app.lua``` from inside project folder to the Lua folder.<br />(On Windows environment, please run ```INSTALL.cmd``` with Administrator priviledges)
 
-You can update to the latest version of the script using ```git pull``` command.
+You update to the latest version of the script using ```git pull``` command.
