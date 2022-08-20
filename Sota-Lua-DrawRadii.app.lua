@@ -1,5 +1,5 @@
 local ScriptName = "Draw Radii";
-local Version = "20220820.0";
+local Version = "v1.0.0 - 20220820.1";
 local CreatorName = "John Markus";
 local Description = "Draw skill circle around you";
 local IconPath = "Sota-Lua-DrawRadii/appicon.png";
@@ -42,7 +42,10 @@ end
 
 function LoadTexturePixel(color) 
     local _path = "Sota-Lua-DrawRadii/images/" .. color .. ".png"
-    UID.LoadTexturePixel(color, _path)
+    if UID.LoadTexturePixel(color, _path) then
+    else
+        ShroudConsoleLog("Texture load failed: " .. _path)
+    end
 end
 
 function ShroudOnStart()
@@ -61,6 +64,13 @@ function ShroudOnStart()
     LoadTexturePixel('cyan')
     LoadTexturePixel('magenta')
 
+    LoadTexturePixel('neon_red')
+    LoadTexturePixel('neon_green')
+    LoadTexturePixel('neon_blue')
+
+    LoadTexturePixel('orange')
+    LoadTexturePixel('dark_green')    
+
     shapes.circle = {}
     shapes.wavy_circle = {}
     for i = 0, 360, 10 do
@@ -73,7 +83,7 @@ function ShowVisualizations()
     UID.UpdateAvatarLocation()
     UID.ClearUsageTracking()
 
-    animation_counter = animation_counter + 30
+    animation_counter = animation_counter + 3
     if animation_counter >= 360 then
         animation_counter = 0
     end
@@ -86,10 +96,10 @@ function ShowVisualizations()
     BardSkills["PsalmOfStagnation"] = "yellow"
     BardSkills["AtonalAria"] = "red"
     BardSkills["SavageSonata"] = "cyan"
-    BardSkills["ConcussiveCanticle"] = "red"
-    BardSkills["MesmerizingMelody"] = "yellow"
-    BardSkills["RhapsodyOfRecovery"] = "green"
-    BardSkills["RefrainOfResistance"] = "blue"
+    BardSkills["ConcussiveCanticle"] = "neon_red"
+    BardSkills["MesmerizingMelody"] = "orange"
+    BardSkills["RhapsodyOfRecovery"] = "neon_green"
+    BardSkills["RefrainOfResistance"] = "neon_blue"
 
     local _buffs = ShroudGetPlayerBuff()
     

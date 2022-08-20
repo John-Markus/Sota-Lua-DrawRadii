@@ -59,9 +59,9 @@ module.LoadTexturePixel = function(color, path)
 	local idx = ShroudLoadTexture(path, true)
 	if idx > 0 then
 		module.textures[color] = idx
-		module.VerboseMsg("Texture loaded: " .. color .. " from " .. path)		
+		return true
 	else
-		module.VerboseMsg("Texture load failed: " .. path)
+		return false
 	end
 end
 
