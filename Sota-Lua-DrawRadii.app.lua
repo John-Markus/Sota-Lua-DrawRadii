@@ -1,5 +1,5 @@
 local ScriptName = "Draw Radii";
-local Version = "1.0";
+local Version = "20220820.0";
 local CreatorName = "John Markus";
 local Description = "Draw skill circle around you";
 local IconPath = "Sota-Lua-DrawRadii/appicon.png";

@@ -1,6 +1,6 @@
 @ECHO OFF
 SETLOCAL
-SET SCRIPTNAME=DrawRadii.app.lua
+SET SCRIPTNAME=Sota-Lua-DrawRadii.app.lua
 SET SCRIPTDIR=%~dp0
 SET LUADIR=%APPDATA%\Portalarium\Shroud of the Avatar\Lua
 ECHO --------------------------------------------------------------------------
