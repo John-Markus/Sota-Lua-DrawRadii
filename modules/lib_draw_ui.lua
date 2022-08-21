@@ -26,21 +26,27 @@ module.used_current = { }
 module.current_ui_object = false;
 module.was_ui_visible = 0
 
+--- Verbose message dumping only enabled via config parameter
+-- @param text Text to show
 module.VerboseMsg = function (text)
 	if module.config.show_verbose_msg then
 		ShroudConsoleLog(text)
 	end
 end
 
+--- Clear usage tracking table and start new round of UI drawing
 module.ClearUsageTracking = function() 
 	module.used_current = { }
 end
 
+--- Mark a handle as used
+-- @param handle Specify UI handle that has been used in the current run
 module.MarkUsed = function(handle)
 	module.used_current[handle] = 1
 	module.used_previously[handle] = 1
 end
 
+--- Hide UI elements that were not drawn on the current run
 module.HideUnused = function()
 	for handle, usage in pairs(module.used_previously) do
 		if module.used_current[handle] then
@@ -58,6 +64,7 @@ module.HideUnused = function()
 	end
 end
 
+--- Update avatar location and calculate additional statistics
 module.UpdateAvatarLocation = function()
 	module.avatar.x = ShroudPlayerX
 	module.avatar.y = ShroudPlayerY
@@ -72,7 +79,7 @@ module.UpdateAvatarLocation = function()
 
 	-- calculate occulsions for the avatar
 	local v1 = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY + 2, ShroudPlayerZ)
-	local v2 = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY + 4, ShroudPlayerZ)	
+	local v2 = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY + 4, ShroudPlayerZ)
 	v1.y = math.min(v1.y, ShroudGetScreenY())
 	v2.y = math.min(v2.y, ShroudGetScreenY())
 	local yd = (v2.y - v1.y) / 5
@@ -83,17 +90,27 @@ module.UpdateAvatarLocation = function()
 
 end
 
+--- Generate a rectangular box with (0, 0) on the left top that stays in the screen
+-- @param x1 Some X axis value 1
+-- @param y1 Some Y axis value 1
+-- @param x2 Some X axis value 2
+-- @param y2 Some Y axis value 2
 module.getBoundsObject = function(x1, y1, x2, y2)
 	local bounds = { }
 
-	bounds.left = math.min(x1, x2, ShroudGetScreenX())
-	bounds.right = math.max(x1, x2, 0)
-	bounds.top = math.min(y1, y2, ShroudGetScreenY())
+	bounds.left   = math.min(x1, x2, ShroudGetScreenX())
+	bounds.right  = math.max(x1, x2, 0)
+	bounds.top    = math.min(y1, y2, ShroudGetScreenY())
 	bounds.bottom = math.max(y1, y2, 0)
 
 	return bounds
 end
 
+--- Visualize a bounding box using a texture
+-- @param handle Handle of the bounding box (used for caching objects and tracking visibility)
+-- @param bounds Bounds object
+-- @param color  Specify pre-loaded texture
+-- @param alpha  Alpha blending values (0 to 1)
 module.drawBoundingBox = function(handle, bounds, color, alpha) 
 	color = color or "white"
 	alpha = alpha or 1
@@ -107,6 +124,9 @@ module.drawBoundingBox = function(handle, bounds, color, alpha)
 	ShroudSetTransparency(module.current_ui_object, UI.Image, alpha)
 end
 
+--- Detect if two bounding boxes overlap over each other (with extra checks for first person view irregularities)
+-- @param bounds1 Bounds object
+-- @param bounds2 Bounds object
 module.detectOverlap = function(bounds1, bounds2) 
 	if bounds1.left < 0 or bounds2.left < 0 or bounds1.top < 0 or bounds2.top < 0 then
 		return false
@@ -155,10 +175,10 @@ module.GetTextureId = function(color)
 end
 
 --- Generate and cache textured element
--- @param handle
--- @param idx1
--- @param idx2
--- @param color
+-- @param handle Handle of the UI Element (used for caching objects and tracking visibility)
+-- @param idx1   Indexing value for caching
+-- @param idx2   Indexing value for caching
+-- @param color  Specify pre-loaded texture
 module.PrepareSolidElement = function(handle, idx1, idx2, color)
 	idx1 = idx1 or 1
 	idx2 = idx2 or 1
@@ -185,6 +205,13 @@ module.PrepareSolidElement = function(handle, idx1, idx2, color)
 	return module.current_ui_object
 end
 
+--- Draw a line on the screen at specified coordinates (0, 0) is left top
+-- @param X1        Some X axis value 1        
+-- @param Y1        Some Y axis value 1         
+-- @param X2        Some X axis value 2
+-- @param Y2        Some Y axis value 2
+-- @param alpha     Alpha blending parameters
+-- @param occulsion If set to 1, will use occulsion list to hide lines overlapping it
 module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)	
 	alpha = alpha or 1
 	occulsion = occulsion or 0
@@ -236,6 +263,10 @@ module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)
 	module.was_ui_visible = module.config.ui_fade_timeout
 end
 
+--- Convert angular position based on current player location to on screen coordinates (0, 0) is left top
+-- @param angle   Angular position (0 = north, clockwise) in degrees
+-- @param radius  Radius distance from the player position
+-- @param yoffset Vertical offset value
 module.ConvertAngleToScreen = function(angle, radius, yoffset)
 	yoffset = yoffset or 0
 
@@ -250,6 +281,15 @@ module.ConvertAngleToScreen = function(angle, radius, yoffset)
 	return vOut
 end
 
+--- Draw angular paths
+-- @param handle            Handle of the UI Elements that are used in the paths (used for caching objects and tracking visibility)
+-- @param paths				Table containing list of tables that has {angle, radius, yoffset} for one-stroke writing
+-- @param color             Specify pre-loaded texture
+-- @param radius_multiplier Radius multiplier to enlarge specified paths
+-- @param angle_offset      Offset angle value on the specified path for easy rotation animation
+-- @param alpha             Alpha blending parameters
+-- @param yoffset           Vertical offset value
+-- @param detect_bounds     If set to 1, will use occulsion list to hide lines overlapping it
 module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle_offset, alpha, yoffset, detect_bounds)
 	if (type(handle) == "table") then
 		paths = handle.paths
@@ -275,8 +315,10 @@ module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle
 	
 	local PB = 0
 	if module.config.align_to_camera == 0 then
+		-- Use Avatar's character orientation as north (0)
 		PB = module.avatar.orientation 
 	else
+		-- Use Camera orientation as north (0)
 		PB = module.avatar.ui_bearing
 	end
 	
@@ -322,7 +364,8 @@ module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle
 		end
 	end
 end
-	
+
+--- Fade out all UI elements
 module.HideVisualizations = function()
     if module.was_ui_visible <= 0 then
         return
