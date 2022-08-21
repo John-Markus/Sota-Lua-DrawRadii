@@ -359,7 +359,12 @@ module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle
 			
 			if flag_drawLine != 0 then								
 				module.PrepareSolidElement(handle, pathidx, i, color)
-				module.DrawLine(LSX, LSY, NSX, NSY, alpha, 1)
+				if vOut.z < 0 then
+					-- if converted location is outside screen
+					ShroudHideObject(module.current_ui_object, UI.Image)
+				else
+					module.DrawLine(LSX, LSY, NSX, NSY, alpha, 1)
+				end 
 			end
 			LSX = NSX; LSY = NSY;
 			flag_drawLine = 1
