@@ -60,8 +60,8 @@ module.UpdateAvatarLocation = function()
 	module.avatar.orientation = ShroudGetPlayerOrientation() + 0
 
 	-- Direction the camera is facing
-	local vCenter = ShroudWorldToScreenPoint(module.avatar.x, module.avatar.y, module.avatar.z)
-	local vNorth = ShroudWorldToScreenPoint(module.avatar.x, module.avatar.y, module.avatar.z + 1)
+	local vCenter = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY, ShroudPlayerZ)
+	local vNorth  = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY, ShroudPlayerZ + 1)
 	module.avatar.ui_bearing = - math.floor(math.deg(math.atan2(vNorth.x - vCenter.x, vNorth.y - vCenter.y))) 
 
 	-- calculate occulsions for the avatar

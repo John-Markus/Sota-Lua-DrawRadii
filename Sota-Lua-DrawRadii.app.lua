@@ -94,15 +94,25 @@ function UpdateCurrentDeck()
                     SetUILanguage(UNIQUE_SKILLS[v.name])
                 end
                 -- See if we can find generic skill name from language specific name
-                if SKILLS_MAP[config.UI_LANGUAGE] then                    
+                local _id = ""
+                if SKILLS_MAP["en"] then 
+                    if SKILLS_MAP["en"][v.name] then
+                        _id = SKILLS_MAP["en"][v.name]
+                    end
+                end
+
+                if SKILLS_MAP[config.UI_LANGUAGE] then 
                     if SKILLS_MAP[config.UI_LANGUAGE][v.name] then
-                        local _id = SKILLS_MAP[config.UI_LANGUAGE][v.name]
-                        config.CURRENT_CARDS[ _id ] = v                  
-                        -- See if we can find out in which School they belong to
-                        if SCHOOLS_MAP[_id] then
-                            local _school = SCHOOLS_MAP[_id]
-                            config.CURRENT_SCHOOLS[_school] = 1
-                        end
+                        _id = SKILLS_MAP[config.UI_LANGUAGE][v.name]
+                    end
+                end
+
+                if _id != "" then
+                    config.CURRENT_CARDS[ _id ] = v                  
+                    -- See if we can find out in which School they belong to
+                    if SCHOOLS_MAP[_id] then
+                        local _school = SCHOOLS_MAP[_id]
+                        config.CURRENT_SCHOOLS[_school] = 1
                     end
                 end
 
@@ -190,7 +200,7 @@ function Visualize_BardSkills()
     end
     if bard_skill_in_use == 0 then        
         --UID.DrawAngularPath("BardSkillCircle", {shapes.circle}, "white", bard_skill_range, 0, 0.1)
-        if config.CURRENT_SCHOOLS["Bard"] then 
+        if config.CURRENT_SCHOOLS["Bard"] then             
             UID.DrawAngularPath{handle = "BardSkillCircle", paths = {shapes.circle}, color = "white", detect_bounds = 1, 
                                 radius_multiplier = bard_skill_range, angle_offset = animation_counter, alpha = 0.1}
         end
