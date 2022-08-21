@@ -66,6 +66,8 @@ end
 
 --- Update avatar location and calculate additional statistics
 module.UpdateAvatarLocation = function()
+	if not ShroudServerTime then return end -- shroud Api not ready, yet
+
 	module.avatar.x = ShroudPlayerX
 	module.avatar.y = ShroudPlayerY
 	module.avatar.z = ShroudPlayerZ
