@@ -93,11 +93,18 @@ module.UpdateAvatarLocation = function()
 end
 
 --- Generate a rectangular box with (0, 0) on the left top that stays in the screen
--- @param x1 Some X axis value 1
--- @param y1 Some Y axis value 1
+-- @param x1 Some X axis value 1 (or a table with .x and .y / LuaVector2 / LuaVector3)
+-- @param y1 Some Y axis value 1 (or a table with .x and .y / LuaVector2 / LuaVector3)
 -- @param x2 Some X axis value 2
 -- @param y2 Some Y axis value 2
 module.getBoundsObject = function(x1, y1, x2, y2)
+	if type(x1) == "userdata" or type(x1) == "table" then
+		y2 = y1.y
+		x2 = y1.x
+		y1 = x1.y
+		x1 = x1.x
+	end
+
 	local bounds = { }
 
 	bounds.left   = math.min(x1, x2, ShroudGetScreenX())
@@ -208,13 +215,11 @@ module.PrepareSolidElement = function(handle, idx1, idx2, color)
 end
 
 --- Draw a line on the screen at specified coordinates (0, 0) is left top
--- @param X1        Some X axis value 1        
--- @param Y1        Some Y axis value 1         
--- @param X2        Some X axis value 2
--- @param Y2        Some Y axis value 2
+-- @param P1        XYZ on screen point 1 (0, 0) is left top
+-- @param P2        XYZ on screen point 2 (0, 0) is left top
 -- @param alpha     Alpha blending parameters
 -- @param occulsion If set to 1, will use occulsion list to hide lines overlapping it
-module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)	
+module.DrawLine = function (P1, P2, alpha, occulsion)	
 	alpha = alpha or 1
 	occulsion = occulsion or 0
 	
@@ -223,23 +228,39 @@ module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)
 		return
 	end
 
+	if P1.z then
+		if P1.z < 0 then 
+			-- object outside screen
+			ShroudHideObject(module.current_ui_object, UI.Image)
+			return
+		end
+	end
+
+	if P2.z then
+		if P2.z < 0 then 
+			-- object outside screen
+			ShroudHideObject(module.current_ui_object, UI.Image)
+			return
+		end
+	end
+
 	-- Hide out of bounds lines
-	if X1 < 0 or Y1 < 0 or X2 < 0 or Y2 < 0 then 
+	if P1.x < 0 or P1.y < 0 or P2.x < 0 or P2.y < 0 then 
 		ShroudHideObject(module.current_ui_object, UI.Image)
 		return
 	end
 
-	if X1 > ShroudGetScreenX() or X2 > ShroudGetScreenX() then
+	if P1.x > ShroudGetScreenX() or P2.x > ShroudGetScreenX() then
 		ShroudHideObject(module.current_ui_object, UI.Image)
 		return
 	end
-	if Y1 > ShroudGetScreenY() or Y2 > ShroudGetScreenY() then
+	if P1.y > ShroudGetScreenY() or P2.y > ShroudGetScreenY() then
 		ShroudHideObject(module.current_ui_object, UI.Image)
 		return
 	end
 
 	if occulsion then
-		local bounds = module.getBoundsObject(X1, Y1, X2, Y2)
+		local bounds = module.getBoundsObject(P1, P2)
 		for _, occulsion_bounds in pairs(module.occulsions) do
 			if module.detectOverlap(bounds, occulsion_bounds) then
 				ShroudHideObject(module.current_ui_object, UI.Image)
@@ -248,19 +269,17 @@ module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)
 		end
 	end
 
-	--ShroudConsoleLog("DrawLine (" .. X1 .. "," .. Y1 .. ") - (" .. X2 .. ","  .. Y2 .. ")")
-
 	-- Calculate parameters for rotating and resizing solid texture into lines
-	local _size = math.ceil(math.sqrt(math.pow(X2-X1,2) + math.pow(Y2-Y1,2)))
-	local _slope = math.deg(math.atan2(X2 - X1 , Y2 - Y1)) + 270
-	local _depth = math.max(1, 4 - math.ceil(Y1 / ShroudGetScreenY() * 3))
+	local _size = math.ceil(math.sqrt(math.pow(P2.x - P1.x,2) + math.pow(P2.y - P1.y, 2)))
+	local _slope = math.deg(math.atan2(P2.x - P1.x , P2.y - P1.y)) + 270
+	local _depth = math.max(1, 4 - math.ceil(P2.y / ShroudGetScreenY() * 3))
 
 	-- Perform UI object modifications
-	ShroudSetPosition    (module.current_ui_object, UI.Image, X1, Y1)
+	ShroudSetPosition    (module.current_ui_object, UI.Image, P1.x, P1.y)
 	ShroudSetSize        (module.current_ui_object, UI.Image, _size, _depth)
 	ShroudRotateObject   (module.current_ui_object, UI.image, _slope)
 	ShroudShowObject     (module.current_ui_object, UI.Image)
-	ShroudSetTransparency(module.current_ui_object, UI.Image, (1 - Y1 / ShroudGetScreenY()) * alpha)
+	ShroudSetTransparency(module.current_ui_object, UI.Image, (1 - P1.y / ShroudGetScreenY()) * alpha)
 
 	module.was_ui_visible = module.config.ui_fade_timeout
 end
@@ -279,6 +298,7 @@ module.ConvertAngleToScreen = function(angle, radius, yoffset)
 	local z = module.avatar.z + math.cos(_angle) * radius
 
 	local vOut = ShroudWorldToScreenPoint(x, y, z)
+	-- Returned coordinates has (0, 0) on left bottom, so reverse it
 	vOut.y = ShroudGetScreenY() - vOut.y
 	return vOut
 end
@@ -326,9 +346,10 @@ module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle
 	
 	
 	-- Last values
-	local LSX, LSY = 0, 0
+	local lastPoint = {x = 0, y = 0, z = 0}
+	local newPoint =  {x = 0, y = 0, z = 0}
 	-- new values
-	local NA, NR, NSX, NSY = 0, 0, 0, 0
+	local NA, NR = 0, 0
 
 	local flag_drawLine = 0	
 	local NOfs
@@ -352,21 +373,14 @@ module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle
 				NR = -NR
 			end
 
-			vOut = module.ConvertAngleToScreen(NA + PB + angle_offset, NR * radius_multiplier, NOfs + yoffset)
+			newPoint = module.ConvertAngleToScreen(NA + PB + angle_offset, NR * radius_multiplier, NOfs + yoffset)
 
-			NSX = vOut.x
-			NSY = vOut.y
 			
 			if flag_drawLine != 0 then								
 				module.PrepareSolidElement(handle, pathidx, i, color)
-				if vOut.z < 0 then
-					-- if converted location is outside screen
-					ShroudHideObject(module.current_ui_object, UI.Image)
-				else
-					module.DrawLine(LSX, LSY, NSX, NSY, alpha, 1)
-				end 
+				module.DrawLine(lastPoint, newPoint, alpha, 1)
 			end
-			LSX = NSX; LSY = NSY;
+			lastPoint = newPoint
 			flag_drawLine = 1
 		end
 	end
