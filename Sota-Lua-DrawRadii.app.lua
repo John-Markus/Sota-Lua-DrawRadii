@@ -1,5 +1,5 @@
 local ScriptName = "Draw Radii";
-local Version = "v1.0.0 - 20220820.1";
+local Version = "v1.1.0 - 20220821.0";
 local CreatorName = "John Markus";
 local Description = "Draw skill circle around you";
 local IconPath = "Sota-Lua-DrawRadii/appicon.png";
@@ -8,7 +8,9 @@ local UID = false;
 local animation_counter = 0
 
 config = {
-
+    UI_LANGUAGE = '',
+    CURRENT_CARDS = {},
+    CURRENT_SCHOOLS = {},
 }
 
 shapes = {
@@ -20,6 +22,12 @@ localizations = {
 
 }
 
+
+UNIQUE_SKILLS = { }
+SCHOOLS_MAP = { }
+SKILLS_MAP = { }
+
+
 -- This is for loading additional lua modules.
 -- Use variable = init_<filename>() to obtain the object
 function importModule(filename)
@@ -27,18 +35,84 @@ function importModule(filename)
     local file = io.open(_path)
     local data = file:read("*all")
     file:close()
-    _G["init_" .. filename] = assert(loadsafe(data))
-    ShroudConsoleLog("Loaded lua module: " .. _path)
+    local obj = assert(loadsafe(data))
+    if obj then
+        _G["init_" .. filename] = obj
+        ShroudConsoleLog("Loaded lua module: " .. filename)
+    else
+        ShroudConsoleLog("Module Load Failed: " .. _path)
+    end
+end
+
+-- This is for loading table from a JSON data.
+function importJSON(filename)
+    local _path = ShroudLuaPath .. "/Sota-Lua-DrawRadii/data/" .. filename
+    local file = io.open(_path)
+    local data = file:read("*all")
+    file:close()
+    local _data = json.parse(data)
+    if _data then
+        ShroudConsoleLog("Loaded JSON data: " .. filename)
+        return _data
+    end
+    ShroudConsoleLog("JSON Load failed: " .. _path)
+    return { }
+end
+
+-- Change UI Language
+function SetUILanguage(lang)
+    if config.UI_LANGUAGE == lang then
+        return
+    end
+    config.UI_LANGUAGE = lang
+    ShroudConsoleLog("LANGUAGE DETECTED: " .. lang)
+
 end
 
 -- localization function
 function __(ident, msg)
-    if localizations[ident] then
-      return localizations[ident]
+    if localizations[config.UI_LANGUAGE] then
+        if localizations[config.UI_LANGUAGE][ident] then
+            return localizations[config.UI_LANGUAGE][ident]
+        end
     end
       
     return msg
 end
+
+-- Periodic functon to update current deck information
+function UpdateCurrentDeck()
+    config.CURRENT_CARDS = { }
+    config.CURRENT_SCHOOLS = { }
+    local _deck =  ShroudCurrentDeck();
+    if _deck then
+        local _cards = ShroudGetDeckCardList(_deck.name);
+        if _cards then
+            for i, v in pairs(_cards) do                
+                -- If this skill has unique name across different languages, use this to detect UI language.
+                if UNIQUE_SKILLS[v.name] then
+                    SetUILanguage(UNIQUE_SKILLS[v.name])
+                end
+                -- See if we can find generic skill name from language specific name
+                if SKILLS_MAP[config.UI_LANGUAGE] then                    
+                    if SKILLS_MAP[config.UI_LANGUAGE][v.name] then
+                        local _id = SKILLS_MAP[config.UI_LANGUAGE][v.name]
+                        config.CURRENT_CARDS[ _id ] = v                  
+                        -- See if we can find out in which School they belong to
+                        if SCHOOLS_MAP[_id] then
+                            local _school = SCHOOLS_MAP[_id]
+                            config.CURRENT_SCHOOLS[_school] = 1
+                        end
+                    end
+                end
+
+                --ConsoleLog(string.format("Deck Card ID: %s Name: %s Qty: %s", v.id, v.name, v.quantity));
+            end
+        end
+    end
+
+end
+
 
 function LoadTexturePixel(color) 
     local _path = "Sota-Lua-DrawRadii/images/" .. color .. ".png"
@@ -49,6 +123,10 @@ function LoadTexturePixel(color)
 end
 
 function ShroudOnStart()
+    UNIQUE_SKILLS = importJSON('unique_skills.json')
+    SCHOOLS_MAP   = importJSON('schools_map.json')
+    SKILLS_MAP    = importJSON('skills_map_rev.json')
+
     importModule('draw_ui')
     UID = init_draw_ui()
 
@@ -77,18 +155,14 @@ function ShroudOnStart()
         table.insert(shapes.circle, {i, 1, 0});
         table.insert(shapes.wavy_circle, {i, 1, math.sin(math.rad(i * 10))/10});
     end
+
+    ShroudRegisterPeriodic("UpdateCurrentDeck", "UpdateCurrentDeck", 3, true)
+    UpdateCurrentDeck()
 end
 
-function ShowVisualizations()
-    UID.UpdateAvatarLocation()
-    UID.ClearUsageTracking()
-
-    animation_counter = animation_counter + 3
-    if animation_counter >= 360 then
-        animation_counter = 0
-    end
-
+function Visualize_BardSkills()
     -- bard skills has fixed range
+
     local bard_skill_range = 5 * (1 + ShroudGetStatValueByName("ResoundingReachBonus"))
     local BardSkills = {}
     BardSkills["MelodyOfMending"] = "green"
@@ -102,27 +176,49 @@ function ShowVisualizations()
     BardSkills["RefrainOfResistance"] = "neon_blue"
 
     local _buffs = ShroudGetPlayerBuff()
+    local bard_skill_in_use = 0
+
+    UID.config.align_to_camera  = 0 
+
+    for i, v in pairs(_buffs) do
+        if BardSkills[v.runeName] then
+            --UID.DrawAngularPath(v.runeName, {shapes.wavy_circle}, BardSkills[v.runeName], bard_skill_range, animation_counter + bard_skill_in_use * 15, 1, bard_skill_in_use / 10)
+            UID.DrawAngularPath{handle = v.runeName, paths = {shapes.wavy_circle}, color = BardSkills[v.runeName], detect_bounds = 1, 
+                                radius_multiplier = bard_skill_range, angle_offset = animation_counter + bard_skill_in_use * 15, alpha = 1, yoffset = bard_skill_in_use / 10}
+            bard_skill_in_use = bard_skill_in_use + 1
+        end
+    end
+    if bard_skill_in_use == 0 then        
+        --UID.DrawAngularPath("BardSkillCircle", {shapes.circle}, "white", bard_skill_range, 0, 0.1)
+        if config.CURRENT_SCHOOLS["Bard"] then 
+            UID.DrawAngularPath{handle = "BardSkillCircle", paths = {shapes.circle}, color = "white", detect_bounds = 1, 
+                                radius_multiplier = bard_skill_range, angle_offset = animation_counter, alpha = 0.1}
+        end
+
+    end
+
+end
+
+
+
+function ShowVisualizations()
+     animation_counter = animation_counter + 3
+    if animation_counter >= 360 then
+        animation_counter = 0
+    end
+
+    local deck = ShroudCurrentDeck()
+    
     
     -- draw UI elements that are aligned to the character
     UID.config.align_to_camera  = 0 
     UID.DrawAngularPath('x', { {{180,1},{0,1},{90,1},{270,1},{0,1}} }, "white", 0.3, 0, 0.1)
 
-    local bard_skill_in_use = 0
-
-    for i, v in pairs(_buffs) do
-        if BardSkills[v.runeName] then
-            bard_skill_in_use = bard_skill_in_use + 1
-            UID.DrawAngularPath(v.runeName, {shapes.wavy_circle}, BardSkills[v.runeName], bard_skill_range, animation_counter + bard_skill_in_use * 15)
-        end
-    end
-    if bard_skill_in_use == 0 then
-        UID.DrawAngularPath("BardSkillCircle", {shapes.circle}, "white", bard_skill_range, 0, 0.1)
-    end
+    Visualize_BardSkills()
 
     -- draw UI element that are aligned to the camera
     UID.config.align_to_camera = 1
 
-    UID.HideUnused()
 end
 
 function DisplayBuffs()
@@ -146,12 +242,14 @@ function ShroudOnGUI()
 end
 
 function ShroudOnUpdate()
-    if UID then
+    if UID then        
+        UID.ClearUsageTracking()
+        UID.UpdateAvatarLocation()
+    
         if ShroudGetPlayerCombatMode() then
             ShowVisualizations()
-        else
-            HideVisualizations()
         end
+        UID.HideUnused()
     end
 end
 

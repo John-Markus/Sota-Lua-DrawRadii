@@ -8,11 +8,15 @@ module.config.avatar_height = 0
 module.config.distance_multiplier = 0.9
 module.config.align_to_camera = 0
 
+
 module.avatar = {x = 0, y = 0, z = 0, orientation = 0, ui_bearing = 0, is_firstperson = 0}
+module.avatar_bounding_box = { }
 
 module.textures = { }
 module.ui_objects = { }
-module.tracking = { }
+module.occulsions = { }
+module.used_previously = { }
+module.used_current = { }
 module.current_ui_object = false;
 module.was_ui_visible = 0
 
@@ -23,15 +27,26 @@ module.VerboseMsg = function (text)
 end
 
 module.ClearUsageTracking = function() 
-	module.tracking = { }
+	module.used_current = { }
+end
+
+module.MarkUsed = function(handle)
+	module.used_current[handle] = 1
+	module.used_previously[handle] = 1
 end
 
 module.HideUnused = function()
-	for handle, objectsAr in pairs(module.ui_objects) do
-		if module.tracking[handle] then
+	for handle, usage in pairs(module.used_previously) do
+		if module.used_current[handle] then
+			module.used_previously[handle] = 1
 		else
-			for key, objectId in pairs(objectsAr) do
-				ShroudHideObject(objectId, UI.Image)
+			if usage == 1 then
+				module.used_previously[handle] = 0
+				if module.ui_objects[handle] then
+					for key, objectId in pairs(module.ui_objects[handle]) do
+						ShroudHideObject(objectId, UI.Image)
+					end
+				end
 			end
 		end
 	end
@@ -39,7 +54,7 @@ end
 
 module.UpdateAvatarLocation = function()
 	module.avatar.x = ShroudPlayerX
-	module.avatar.y = ShroudPlayerY + module.config.avatar_height
+	module.avatar.y = ShroudPlayerY
 	module.avatar.z = ShroudPlayerZ
 	-- Direction the avatar is facing
 	module.avatar.orientation = ShroudGetPlayerOrientation() + 0
@@ -48,6 +63,64 @@ module.UpdateAvatarLocation = function()
 	local vCenter = ShroudWorldToScreenPoint(module.avatar.x, module.avatar.y, module.avatar.z)
 	local vNorth = ShroudWorldToScreenPoint(module.avatar.x, module.avatar.y, module.avatar.z + 1)
 	module.avatar.ui_bearing = - math.floor(math.deg(math.atan2(vNorth.x - vCenter.x, vNorth.y - vCenter.y))) 
+
+	-- calculate occulsions for the avatar
+	local v1 = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY + 2, ShroudPlayerZ)
+	local v2 = ShroudWorldToScreenPoint(ShroudPlayerX, ShroudPlayerY + 4, ShroudPlayerZ)	
+	v1.y = math.min(v1.y, ShroudGetScreenY())
+	v2.y = math.min(v2.y, ShroudGetScreenY())
+	local yd = (v2.y - v1.y) / 5
+
+	module.avatar_bounding_box = module.getBoundsObject(v1.x - yd, v1.y, v2.x + yd,v2.y)
+	module.occulsions["avatar_bounding_box"] = module.avatar_bounding_box
+	--module.drawBoundingBox("avatar", module.avatar_bounding_box, "red", 0.1)	
+
+end
+
+module.getBoundsObject = function(x1, y1, x2, y2)
+	local bounds = { }
+
+	bounds.left = math.min(x1, x2, ShroudGetScreenX())
+	bounds.right = math.max(x1, x2, 0)
+	bounds.top = math.min(y1, y2, ShroudGetScreenY())
+	bounds.bottom = math.max(y1, y2, 0)
+
+	return bounds
+end
+
+module.drawBoundingBox = function(handle, bounds, color, alpha) 
+	color = color or "white"
+	alpha = alpha or 1
+
+	module.MarkUsed(handle)
+	module.PrepareSolidElement(handle, 1, 1, color)
+
+	ShroudSetPosition    (module.current_ui_object, UI.Image, bounds.left, bounds.top)
+	ShroudSetSize        (module.current_ui_object, UI.Image, bounds.right - bounds.left, bounds.bottom - bounds.top)
+	ShroudShowObject     (module.current_ui_object, UI.Image)
+	ShroudSetTransparency(module.current_ui_object, UI.Image, alpha)
+end
+
+module.detectOverlap = function(bounds1, bounds2) 
+	if bounds1.left < 0 or bounds2.left < 0 or bounds1.top < 0 or bounds2.top < 0 then
+		return false
+	end
+
+	if bounds1.right > ShroudGetScreenX() or bounds2.right > ShroudGetScreenX() or bounds1.bottom > ShroudGetScreenY() or bounds2.bottom > ShroudGetScreenY() then
+		return false
+	end
+
+	-- check if one bounds is to the left of the other
+	if bounds1.right < bounds2.left or bounds2.right < bounds1.left then
+		return false
+	end
+
+	-- check if one bounds is to the top of the other
+	if bounds1.bottom < bounds2.top or bounds2.bottom < bounds1.top then
+		return false
+	end
+
+	return true
 
 end
 
@@ -106,8 +179,10 @@ module.PrepareSolidElement = function(handle, idx1, idx2, color)
 	return module.current_ui_object
 end
 
-module.DrawLine = function (X1, Y1, X2, Y2, alpha)
+module.DrawLine = function (X1, Y1, X2, Y2, alpha, occulsion)	
 	alpha = alpha or 1
+	occulsion = occulsion or 0
+	
 	-- Draw a line using Solid Texture (Use Prepare Solid Element first)
 	if module.current_ui_object == -1 then
 		return
@@ -127,6 +202,17 @@ module.DrawLine = function (X1, Y1, X2, Y2, alpha)
 		ShroudHideObject(module.current_ui_object, UI.Image)
 		return
 	end
+
+	if occulsion then
+		local bounds = module.getBoundsObject(X1, Y1, X2, Y2)
+		for _, occulsion_bounds in pairs(module.occulsions) do
+			if module.detectOverlap(bounds, occulsion_bounds) then
+				ShroudHideObject(module.current_ui_object, UI.Image)
+				return false
+			end
+		end
+	end
+
 	--ShroudConsoleLog("DrawLine (" .. X1 .. "," .. Y1 .. ") - (" .. X2 .. ","  .. Y2 .. ")")
 
 	-- Calculate parameters for rotating and resizing solid texture into lines
@@ -158,17 +244,29 @@ module.ConvertAngleToScreen = function(angle, radius, yoffset)
 	return vOut
 end
 
-module.DrawAngularPath = function(handle, pathCollection, color, radius_multiplier, angle_offset, alpha)
+module.DrawAngularPath = function(handle, paths, color, radius_multiplier, angle_offset, alpha, yoffset, detect_bounds)
+	if (type(handle) == "table") then
+		paths = handle.paths
+		color = handle.color
+		radius_multiplier = handle.radius_multiplier
+		angle_offset = handle.angle_offset
+		alpha = handle.alpha
+		yoffset = handle.yoffset
+		detect_bounds = handle.detect_bounds
+		-- must be last
+		handle = handle.handle
+		
+	end
+
 	color             = color or "white"
 	radius_multiplier = radius_multiplier or 1
 	angle_offset      = angle_offset or 0
 	alpha             = alpha or 1
+	yoffset           = yoffset or 0
+	detect_bounds     = detect_bounds or 0
 
-	module.tracking[handle] = 1
+	module.MarkUsed(handle)
 	
-	local PX = module.avatar.x
-	local PY = module.avatar.y
-	local PZ = module.avatar.z
 	local PB = 0
 	if module.config.align_to_camera == 0 then
 		PB = module.avatar.orientation 
@@ -178,16 +276,16 @@ module.DrawAngularPath = function(handle, pathCollection, color, radius_multipli
 	
 	
 	-- Last values
-	local LA, LR, LX, LY, LZ, LSX, LSY = 0, 0, 0, 0, 0, 0, 0
+	local LSX, LSY = 0, 0
 	-- new values
-	local NA, NR, NX, NY, NZ, NSX, NSY = 0, 0, 0, 0, 0, 0, 0
+	local NA, NR, NSX, NSY = 0, 0, 0, 0
 
 	local flag_drawLine = 0	
 	local NOfs
 	-- adjust from UI size differences
 	radius_multiplier = radius_multiplier * module.config.distance_multiplier
 	
-	for pathidx, pathArray in ipairs(pathCollection) do        
+	for pathidx, pathArray in ipairs(paths) do        
 		-- We want to skip first element
 		flag_drawLine = 0
 		for i = 1, #pathArray do
@@ -204,16 +302,20 @@ module.DrawAngularPath = function(handle, pathCollection, color, radius_multipli
 				NR = -NR
 			end
 
-			vOut = module.ConvertAngleToScreen(NA + PB + angle_offset, NR * radius_multiplier, NOfs)
+		
+
+			vOut = module.ConvertAngleToScreen(NA + PB + angle_offset, NR * radius_multiplier, NOfs + yoffset)
 
 			NSX = vOut.x
 			NSY = vOut.y
 
-			if flag_drawLine != 0 then
-				module.PrepareSolidElement(handle, pathidx, i, color)
-				module.DrawLine(LSX, LSY, NSX, NSY, alpha)
+			module.PrepareSolidElement(handle, pathidx, i, color)
+			if flag_drawLine != 0 then								
+				module.DrawLine(LSX, LSY, NSX, NSY, alpha, 1)
+			else
+				ShroudHideObject(module.current_ui_object, UI.Image)
 			end
-			LA = NA; LR = NR; LX = NX; LY = NY; LZ = NZ; LSX = NSX; LSY = NSY;
+			LSX = NSX; LSY = NSY;
 			flag_drawLine = 1
 		end
 	end
@@ -225,14 +327,19 @@ module.HideVisualizations = function()
     end
 
     module.was_ui_visible = module.was_ui_visible - 1
-    for handle, objectAr in pairs(module.ui_objects) do
-        for key, objectId in pairs(objectAr) do
-            if module.was_ui_visible > 0 then
-                ShroudSetTransparency(objectId,UI.Image, module.was_ui_visible / module.config.ui_fade_timeout)
-            else
-                ShroudHideObject(objectId,UI.Image)
-            end
-        end
+    for handle, usage in pairs(module.used_previously) do
+		if usage == 1 then
+			if module.ui_objects[handle] then
+				for key, objectId in pairs(module.ui_objects[handle]) do
+					if module.was_ui_visible > 0 then
+						ShroudSetTransparency(objectId,UI.Image, module.was_ui_visible / module.config.ui_fade_timeout)
+					else
+						ShroudHideObject(objectId,UI.Image)
+						module.used_previously[handle] = 0
+					end
+				end
+			end
+		end
     end    	
 end
 
